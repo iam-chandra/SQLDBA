@@ -1,0 +1,428 @@
+      SERVER NAMES 
+
+EUNLDAMSSQU006.emea.brinksgbl.com                                                   Rheem server IG-SQL01.IGCANADA.LOCAL(IG-SQL01) SA password sql server (Sqlserver2019)
+NAGBLSQP002.brinksgbl.com                                                           Sandbox server Rheem AT1SCCMSQL01(AFSDBTEST03.onerheem.com)
+nauscarsqp004.na.brinksgbl.com                                                      AFSDBTEST03 & AFSDBTEST01(All Availability alert setup in this server)
+LATMXCARSQP008.latam.brinksgbl.com                                                  
+FRMONESBPREDTA1.emea.brinksgbl.com                                                  select * into Report.SAFE_DEPOSIT_FACT_01_nov from Report.SAFE_DEPOSIT_FACT
+BGSLONSB31.BGS.BRINKSGBL.COM
+NAP0025AP06.brinksinc.com
+NAPANSQP002.latam.brinksgbl.com
+ARBUEDB03.latam.brinksgbl.com
+NAB0199AP01.brinksinc.com
+EUBGSSQP001 (10.153.4.55)
+iTrackB0115dbalias.na.brinksgbl.com
+jump server NAUSPLNPXM001.brinksgbl.com
+NAB0770AP02 
+
+NAUSCARSQP009  
+
+---we need to see any server to see any server file we need to use below query.
+    \\AN1PINPOINT01(servername)\D$(drivename)
+	
+----We need to see any server drive space use below query
+      EXEC MASTER..xp_fixeddrives 
+      GO
+
+URL: https://ivision.logicmonitor.com 
+Username: SQLMonitor 
+Password: Welcome1!	  
+   
+Queries for audit
+•    Server Permissions Query
+         Exec sp_helpsrvrolemember
+•    Database Permissions Query
+          Sp_helprolemember
+
+
+LATMEXAPCOMSAF server needs to give  Login: LATMEXAPCOMSAF\Administrador Password: N35p3yy0
+
+
+Non-prod server ( LAMXAZSQLSQD001.latam.brinksgbl.com )
+
+Non_prod server testing perpose ( NAUSPLNSQD001.na.brinksgbl.com  NAUSPLNSQD002.na.brinksgbl.com )
+
+
+Brinks VPN connects with help of cisco  (  navpn.brinksinc.com  )
+                                           drnavpn.brinksinc.com
+                                           navpn1.brinksinc.com   )
+
+•	Veeam Components: https://nausplnvbr001.brinksgbl.com:9443/login.aspx (Veeam Backup Enterprise Manager URL)
+
+Sandbox server( Nausplnsqd003.na.brinksgbl.com  )
+
+RITM  RITM0666282 ticket
+==========================================================================================================
+Brinks shared path  
+    \\sqlbackup\backup
+  shared path for brinks    \\sqlbackup
+
+
+
+every Monday backup files want to delete prod and non-product bak files only. 
+                       \\sqlbackup\backup\sqlnonprod -------- Shared path
+
+                        \\sqlbackup\SQLProd\Adhoc_Change_Backups  ---------- for Adhoc backups
+
+
+
+
+=============================================================================================================
+Shared path for Rheem 
+
+   \\Afscifs\MSSQL_backup_Share\ for Rheem
+         This shared path use for to move Backup file to release the space.
+=============================================================================================================
+cisco vpn for Rheem server
+          
+ --    lokesh.gonam.ctr@rheem.com
+ onerheem\Lokesh.Gonam.ctr
+Login Name :   Lokesh.Gonam.ctr
+Password       :   R#eem@2025
+
+-- saroj.panigrahi.ctr@Rheem.com
+Username: onerheem\saroj.panigrahi.ctr
+Password: Smart@4321
+
+
+---IC_QUERY Credentials
+
+
+--https://us3sbg.osiremote.com/RDWeb/Pages/en-US/login.aspx 
+Ic-sbg\lgonam
+Newstart@0222!
+
+---Server inside to connect DPA
+  Username: dpaadmin
+ Password: %05&5lN8pA7C
+ URL: http://localhost:8123/iwc/login.iwc 
+
+
+-----US3SBG-DPA01(Server)
+     us3sbg.osiremote.com(Advance settings give servername)
+	 login method (Allow me to select later)
+	 	 
+	 
+
+Username: onerheem\saroj.panigrahi.ctr
+Password: R#eem5467
+
+===========================================
+
+Gatesair vpn conncect                
+  Connect with Gates air VPN
+=========================
+216.138.25.245
+
+U : Continuserve
+P : YKpX36hzyP
+
+User: lgonam
+password:Newstart@1011!
+(Brescia vpn need to connect.)
+
+username: uthalari(Quincy)
+password: Newstart@2024
+
+--Username -vprakash  password -V@1shn@vi#gate
+
+Username: vyadav
+Password :NewStart@2023
+(Quincy VPN need to connect)
+
+=========================
+RDP conncet  DNYSQLDBPRD01  (prod)
+              10.10.0.216   (Dev)
+
+Username - GATESAIR\PSADMIN 
+PASSWORD-  GAP50pl5S0ft16! GAP50pl5S0ft16!
+=========================
+Delete old backup file in gatesair in file location Go to this path : I:\User\PSBOPEPM\PSBOPEPM
+
+===============================================================================================================================================================
+ My credentials for brinks
+
+      
+      E-mail address:  Chandrasekhar.Kuntimaddi@brinks.com
+      Cred: Zxcvbnm@20
+      Username: BRINKSGBL\kuntcha
+
+My Rheem credentials 
+                c.sekhar.ctr@rheem.com
+      Username: c.sekhar.ctr
+      Password: R#eem2024
+	  
+---------------------------------------
+-- Tanium
+ Signed Out | Tanium - Link	  
+-- DNS Names 
+ LATAM IT Team
+•              rheembr.local
+•              cemsa.local
+•              rheemperu.com
+•              rheemmx.local
+Friedrich IT Team
+•              friedrich.local 
+
+
+
+
+      
+**********************************************************************************************************************************************************************
+----To get all drive Freespace and drive size in MB
+
+SELECT distinct(volume_mount_point), 
+  total_bytes/1048576 as Size_in_MB, 
+  available_bytes/1048576 as Free_in_MB,
+  (select ((available_bytes/1048576* 1.0)/(total_bytes/1048576* 1.0) *100)) as FreePercentage
+FROM sys.master_files AS f CROSS APPLY 
+  sys.dm_os_volume_stats(f.database_id, f.file_id)
+group by volume_mount_point, total_bytes/1048576, 
+  available_bytes/1048576 order by 1
+
+
+
+
+
+when ever backup take in any server you can take (copy only backup) .
+
+   Note: To release unused space, we shrink File type Data(.mdf) and log(.ldf)  in the case of TempDB files whereas while releasing space from log drive(G),
+         We shrink log(.ldf) files only.  Do not shrink Datafile(.mdf) of any database.
+
+
+
+
+
+
+if your drive is full in that drive only data files are there your "unable" to get free space .   
+    that time you need to send mail to ivision team ....if in case that drive
+           in full backup file before 30 days files you can delete , before delete you can ask you client .
+if in case that drive with log file then you can shrink "file" only, that reliese the unused space .
+    before you perform shrink you can run two commands (  dbcc sqlperf(logspace)  and ( select name,log_reuse_wait_desc from sys.databases )
+              Data files are store in 'E' drive only.
+              full backup extension(.bak)
+              manual backup (.trn)
+              diffrenceal backup(.diff)
+
+
+---salesforce credentials
+    Username: Lokesh.gonam@continuserve.com
+    PASS: R#eem@2025
+
+
+
+
+blocking finding query ( select *from sys.sysprocesses where blocked<>0 )
+
+datafiles are stored in ( 'E' drive ) 
+
+* RITM creation steps     
+          1.service now you can choice " service catalog "
+          2.then choose " infrastructure service" 
+          3.then "servers"
+          4.then "modify a vm"    
+          5.hostname and ip address both are use ('server name' ex-(EUNLDAMSSQU006) 
+          6. in justfication ex-(We don't have scope to release space from F drive on server NAGBLSQP002.
+                                   F drive having Primary & secondary data files , those occupying disk space)
+          7. then click order now that time you will get one 'RITM' that RITM copy then mail to "servicedesk@ivision.com".
+
+
+
+
+
+
+=============================================================================================================================== 
+Script to find the last reboot:--
+
+--CMD
+systeminfo | find "System Boot Time"
+
+
+
+SELECT sqlserver_start_time 'Last Reboot',GetDate() 'Current Date', DATEDIFF(DD, sqlserver_start_time,GETDATE())'Up Time in Days' FROM sys.dm_os_sys_info;
+
+===============================================================================================================================
+
+Blockings query:
+
+
+select * from sys.sysprocesses where blocked <> 0
+
+
+===============================================================================================================================
+
+Query to get if there are any blockings on SQL 2000 version
+
+
+SELECT *
+FROM master.dbo.sysprocesses where blocked <> 0
+GO
+
+
+===============================================================================================================================
+
+-----Script to find lead blocker-
+
+
+select  status ,loginame,cmd, cpu, memusage, physical_io, *
+from master..sysprocesses a
+where exists ( select b.*
+from master..sysprocesses b
+where b.blocked > 0 and
+b.blocked = a.spid ) and not
+exists ( select b.*
+from master..sysprocesses b
+where b.blocked > 0 and
+b.spid = a.spid )
+order by spid
+
+=====================================================================================================================================
+------To find long-running queries-
+
+
+SELECT
+r.session_id
+, r.start_time
+, TotalElapsedTime_ms = r.total_elapsed_time
+, r.[status]
+, r.command
+, DatabaseName = DB_Name(r.database_id)
+, r.wait_type
+, r.last_wait_type
+, r.wait_resource
+, r.cpu_time
+, r.reads
+, r.writes
+, r.logical_reads
+, t.[text] AS [executing batch]
+, SUBSTRING(
+t.[text], r.statement_start_offset / 2,
+( CASE WHEN r.statement_end_offset = -1 THEN DATALENGTH (t.[text])
+ELSE r.statement_end_offset
+END - r.statement_start_offset ) / 2
+) AS [executing statement]
+, p.query_plan
+FROM
+sys.dm_exec_requests r
+CROSS APPLY
+sys.dm_exec_sql_text(r.sql_handle) AS t
+CROSS APPLY
+sys.dm_exec_query_plan(r.plan_handle) AS p
+Order by
+r.total_elapsed_time DESC;
+
+
+---- Top CPU usage query to get
+
+SELECT
+    r.session_id
+    ,st.TEXT AS batch_text
+    ,SUBSTRING(st.TEXT, statement_start_offset / 2 + 1, (
+            (
+                CASE
+                    WHEN r.statement_end_offset = - 1
+                        THEN (LEN(CONVERT(NVARCHAR(max), st.TEXT)) * 2)
+                    ELSE r.statement_end_offset
+                    END
+                ) - r.statement_start_offset
+            ) / 2 + 1) AS statement_text
+    ,qp.query_plan AS 'XML Plan'
+    ,r.cpu_time, r.total_elapsed_time
+    ,r.logical_reads, r.writes, r.dop
+FROM sys.dm_exec_requests r
+CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) AS st
+CROSS APPLY sys.dm_exec_query_plan(r.plan_handle) AS qp
+ORDER BY cpu_time DESC
+
+
+================================================================================================================================
+Disk space ( you can attach a screenshot of my computer all disk status)
+
+xp_fixeddrives
+
+==============================================================================================================================
+-----Used/Unused space query:
+select 
+[FileSizeMB] =
+convert(numeric(10,2),round(a.size/128.,2)),
+[UsedSpaceMB] =
+convert(numeric(10,2),round(fileproperty( a.name,'SpaceUsed')/128.,2)) ,
+[UnusedSpaceMB] =
+convert(numeric(10,2),round((a.size-fileproperty( a.name,'SpaceUsed'))/128.,2)) ,
+[DBFileName] = a.name
+from
+sysfiles a
+
+===============================================================================================================================
+Version query(sql): 
+
+Select @@version
+
+
+
+SELECT
+    name,
+    size
+FROM sys.master_files
+
+
+================================================================================================================================
+
+Temp DB drive issue query
+
+
+Note- we are not doing during business hours (User ask or ivision ask we will do this)
+
+  
+declare @DBFileName sysname
+declare @TargetFreeMB int
+declare @ShrinkIncrementMB int
+
+-- Set Name of Database file to shrink
+set @DBFileName = 'tempdev'
+
+
+-- Set Desired file free space in MB after shrink
+set @TargetFreeMB = 152740
+
+-- Set Increment to shrink file by in MB
+set @ShrinkIncrementMB = 500
+
+-- Show Size, Space Used, Unused Space, and Name of all database files
+select    [FileSizeMB]    =    convert(numeric(10,2),round(a.size/128.,2)),    [UsedSpaceMB]    =    convert(numeric(10,2),round(fileproperty( a.name,'SpaceUsed')/128.,2)) ,    [UnusedSpaceMB]    =    convert(numeric(10,2),round((a.size-fileproperty( a.name,'SpaceUsed'))/128.,2)) ,    [DBFileName]    =    a.name
+from    sysfiles a
+
+declare @sql varchar(8000)
+declare @SizeMB int
+declare @UsedMB int
+
+-- Get current file size in MB
+select @SizeMB = size/128. from sysfiles where name = @DBFileName
+
+-- Get current space used in MB
+select @UsedMB = fileproperty( @DBFileName,'SpaceUsed')/128.
+
+select [StartFileSize] = @SizeMB, [StartUsedSpace] = @UsedMB, [DBFileName] = @DBFileName
+
+-- Loop until file at desired sizewhile  @SizeMB > @UsedMB+@TargetFreeMB+@ShrinkIncrementMB    begin
+
+    set @sql = 'dbcc shrinkfile ( ['+@DBFileName+'], '+ convert(varchar(20),@SizeMB-@ShrinkIncrementMB)+' ) '
+
+    print 'Start ' + @sql    print 'at '+convert(varchar(30),getdate(),121)
+
+    exec ( @sql )
+
+    print 'Done ' + @sql    print 'at '+convert(varchar(30),getdate(),121)
+
+    -- Get current file size in MB    select @SizeMB = size/128. from sysfiles where name = @DBFileName        -- Get current space used in MB    select @UsedMB = fileproperty( @DBFileName,'SpaceUsed')/128.    select [FileSize] = @SizeMB, [UsedSpace] = @UsedMB, [DBFileName] = @DBFileName
+
+    end
+
+select [EndFileSize] = @SizeMB, [EndUsedSpace] = @UsedMB, [DBFileName] = @DBFileName
+
+-- Show Size, Space Used, Unused Space, and Name of all database files
+select    [FileSizeMB]    =        convert(numeric(10,2),round(a.size/128.,2)),    [UsedSpaceMB]    =        convert(numeric(10,2),round(fileproperty( a.name,'SpaceUsed')/128.,2)) ,    [UnusedSpaceMB]    =        convert(numeric(10,2),round((a.size-fileproperty( a.name,'SpaceUsed'))/128.,2)) ,    [DBFileName]    = a.name
+from    sysfiles a
+
+
+
