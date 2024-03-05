@@ -1,0 +1,472 @@
+---To get all databases sizes
+SELECT 
+    DB_NAME(database_id) AS [Database Name],
+    CAST(SUM(size) * 8.0 / 1024 AS DECIMAL(18, 2)) AS [Size in MB]
+FROM sys.master_files
+GROUP BY database_id
+ORDER BY [Size in MB] DESC;
+
+---If you want see the deadlocks we need to ("Management" and "extended events" and "systemhealth" and "packageeventfile")
+
+--- to get the databases datafiles and log file 
+SELECT name, physical_name AS FileLocation
+FROM sys.master_files
+
+---- To find the how much process percentage query completed and few deatils
+select * from sys.dm_exec_requests where session_id = yoursession id
+
+--- To get the blocked query and blocking query deatils 
+SELECT
+    r.session_id AS blocked_session_id,
+    r.blocking_session_id,
+    t.text AS blocked_query,
+    r.wait_type,
+    r.wait_time,
+    r.wait_resource
+FROM sys.dm_exec_requests r
+CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) t
+LEFT JOIN sys.dm_exec_requests r2 ON r.blocking_session_id = r2.session_id
+WHERE r.blocking_session_id > 0;
+
+
+------Login issues (password when changed and password expire date give below query
+
+SELECT @@SERVERNAME AS ServerName, SL.name AS LoginName
+,LOGINPROPERTY(SL.name, 'PasswordLastSetTime') AS PasswordLastSetTime
+,ISNULL(CONVERT(varchar(100),LOGINPROPERTY(SL.name, 'DaysUntilExpiration')),'Never Expire') AS DaysUntilExpiration
+,ISNULL(CONVERT(varchar(100),DATEADD(dd, CONVERT(int, LOGINPROPERTY(SL.name, 'DaysUntilExpiration')),CONVERT(int, LOGINPROPERTY(SL.name, 'PasswordLastSetTime'))),101),'Never Expire') AS PasswordExpirationDate,
+
+CASE
+WHEN is_expiration_checked = 1 THEN 'TRUE' ELSE 'FALSE'
+END AS PasswordExpireChecked
+
+FROM sys.sql_logins AS SL
+
+WHERE SL.name NOT LIKE '##%' AND SL.name NOT LIKE 'endPointUser' and is_disabled = 0
+
+ORDER BY (LOGINPROPERTY(SL.name, 'PasswordLastSetTime')) DESC
+
+
+----- This will help you identify the most CPU-intensive queries.
+
+SELECT TOP 10
+    qs.total_worker_time / qs.execution_count AS avg_cpu_time,
+    qs.total_worker_time,
+    qs.execution_count,
+    t.text AS query_text,
+    p.query_plan
+FROM sys.dm_exec_query_stats qs
+CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) t
+CROSS APPLY sys.dm_exec_query_plan(qs.plan_handle) p
+ORDER BY qs.total_worker_time DESC;
+
+----Here's a query to get the deadlock details 
+
+WITH DeadlockEvents AS
+(
+    SELECT
+        XEvent.query('.') AS DeadlockGraph,
+        XEvent.value('@timestamp', 'datetime2') AS EventTime
+    FROM
+    (
+        SELECT
+            CAST(target_data AS XML) AS TargetData
+        FROM sys.dm_xe_session_targets AS st
+        JOIN sys.dm_xe_sessions AS s
+            ON s.address = st.event_session_address
+        WHERE s.name = 'system_health'
+            AND st.target_name = 'ring_buffer'
+    ) AS Data
+    CROSS APPLY TargetData.nodes('RingBufferTarget/event[@name="xml_deadlock_report"]') AS XEventData(XEvent)
+)
+SELECT
+    DeadlockGraph,
+    EventTime
+FROM DeadlockEvents
+ORDER BY EventTime DESC;
+
+--- when Fullbackups happend to see
+SELECT database_name, backup_start_date, backup_finish_date, type
+FROM msdb.dbo.backupset
+WHERE type = 'D' -- 'D' indicates full backups
+ORDER BY backup_finish_date DESC;
+
+ 
+--- when Fullbackups happend to see
+SELECT database_name, backup_start_date, backup_finish_date, type
+FROM msdb.dbo.backupset
+WHERE type = 'L' -- 'L' indicates log backups
+ORDER BY backup_finish_date DESC;
+
+--- Fullbackup and LastDifferential and log backup deatils to get use below query.
+SELECT 
+    bs.database_name, 
+    MAX(CASE WHEN bs.type = 'D' THEN bs.backup_finish_date ELSE NULL END) AS LastFullBackup,
+    MAX(CASE WHEN bs.type = 'I' THEN bs.backup_finish_date ELSE NULL END) AS LastDifferential,
+    MAX(CASE WHEN bs.type = 'L' THEN bs.backup_finish_date ELSE NULL END) AS LastLog
+FROM msdb.dbo.backupset bs
+GROUP BY bs.database_name
+ORDER BY bs.database_name DESC
+
+      (OR)
+	  
+WITH CTE AS
+(
+              SELECT database_name, backup_finish_date, [type]
+                             , ROW_NUMBER() OVER (PARTITION BY database_name ORDER BY backup_set_id DESC) AS [row_num]
+              FROM msdb.dbo.backupset
+              WHERE [type] IN ('D', 'I','L')
+),
+CTE2 AS
+(
+              SELECT database_name
+                             , MAX(CASE WHEN [type] = 'D' THEN backup_finish_date END) AS [full]
+                             , MAX(CASE WHEN [type] = 'I' THEN backup_finish_date END) AS [differential]
+                             , MAX(CASE WHEN [type] = 'L' THEN backup_finish_date END) AS [log]
+                             , MAX(CASE WHEN [row_num] = 1 THEN backup_finish_date END) AS [Last backup date]  
+                             , MAX(CASE WHEN [row_num] = 1 THEN [type] END) AS [Last backup type]
+              FROM CTE
+              GROUP BY database_name
+)
+SELECT d.name AS [Database Name]
+              , b.[full]
+              , b.[differential]
+              , b.[Last backup date]
+              , CASE b.[Last backup type]
+                             WHEN 'D' THEN 'full'
+                             WHEN 'I' THEN 'differential'
+                             WHEN 'L' THEN 'Log'
+              END AS [Last backup type]
+              , d.create_date
+FROM sys.databases d
+LEFT JOIN CTE2 b
+ON d.name = b.database_name
+--WHERE d.name IN ('PowerBI_Report_ServerDB',
+AND d.state_desc = 'ONLINE'   	  
+
+------- to know the sql services status
+
+SELECT servicename, status_desc, last_startup_time
+FROM sys.dm_server_services;
+
+
+-- recovery_model databases
+SELECT name, recovery_model_desc
+FROM sys.databases
+GO
+
+-- View SQL Server Error Logs
+EXEC xp_readerrorlog;
+
+
+--- Cluster node status and cluster node details
+SELECT NodeName, status, status_description, is_current_owner   
+FROM sys.dm_os_cluster_nodes;
+
+
+--- check job status
+
+--Job Status--
+SELECT 
+name
+,CONVERT(VARCHAR(16), date_created, 120) date_created
+,CONVERT(VARCHAR(16), date_modified,120) date_modified
+,sysjobsteps.step_id
+,sysjobsteps.step_name
+,LEFT(CAST(sysjobsteps.last_run_date AS VARCHAR),4)+ '-'
++SUBSTRING(CAST(sysjobsteps.last_run_date AS VARCHAR),5,2)+'-'
++SUBSTRING(CAST(sysjobsteps.last_run_date AS VARCHAR),7,2) last_run_date
+,
+CASE 
+WHEN LEN(CAST(sysjobsteps.last_run_time AS VARCHAR)) = 6  
+  THEN SUBSTRING(CAST(sysjobsteps.last_run_time AS VARCHAR),1,2) 
+    +':' + SUBSTRING(CAST(sysjobsteps.last_run_time AS VARCHAR),3,2)
+    +':' + SUBSTRING(CAST(sysjobsteps.last_run_time AS VARCHAR),5,2)
+WHEN LEN(CAST(sysjobsteps.last_run_time AS VARCHAR)) = 5
+  THEN '0' + SUBSTRING(CAST(sysjobsteps.last_run_time AS VARCHAR),1,1) 
+    +':'+SUBSTRING(CAST(sysjobsteps.last_run_time AS VARCHAR),2,2)
+    +':'+SUBSTRING(CAST(sysjobsteps.last_run_time AS VARCHAR),4,2)
+WHEN LEN(CAST(sysjobsteps.last_run_time AS VARCHAR)) = 4
+  THEN '00:' 
+    + SUBSTRING(CAST(sysjobsteps.last_run_time AS VARCHAR),1,2)
+    +':' + SUBSTRING(CAST(sysjobsteps.last_run_time AS VARCHAR),3,2)
+WHEN LEN(CAST(sysjobsteps.last_run_time AS VARCHAR)) = 3
+  THEN '00:' 
+    +'0' + SUBSTRING(CAST(sysjobsteps.last_run_time AS VARCHAR),1,1)
+    +':' + SUBSTRING(CAST(sysjobsteps.last_run_time AS VARCHAR),2,2)
+WHEN LEN(CAST(sysjobsteps.last_run_time AS VARCHAR)) = 2  THEN '00:00:' + CAST(sysjobsteps.last_run_time AS VARCHAR)
+WHEN LEN(CAST(sysjobsteps.last_run_time AS VARCHAR)) = 1  THEN '00:00:' + '0'+ CAST(sysjobsteps.last_run_time AS VARCHAR)
+END last_run_time, last_run_outcome =CASE 
+        WHEN sysjobsteps.last_run_outcome = '0'  THEN 'Failed'
+						WHEN sysjobsteps.last_run_outcome = '1' THEN 'Succeeded'
+        WHEN sysjobsteps.last_run_outcome = '2' THEN 'Retry'
+        WHEN sysjobsteps.last_run_outcome = '3' THEN 'Canceled'
+        WHEN sysjobsteps.last_run_outcome = '5' THEN 'Unknown'
+		End,
+	Status = case when sysjobs.enabled= '1' then 'Enabled'
+		when sysjobs.enabled= '0' then 'Disabled'
+		End
+ 
+FROM msdb.dbo.sysjobs
+INNER JOIN msdb.dbo.sysjobsteps
+ON sysjobs.job_id = sysjobsteps.job_id
+ORDER BY sysjobsteps.last_run_date DESC;
+
+
+
+---- AlwaysON Sync Lag isssue.
+
+;WITH 
+               AG_Stats AS 
+                                             (
+                                             SELECT AR.replica_server_name,
+                                                               HARS.role_desc, 
+                                                               Db_name(DRS.database_id) [DBName], 
+                                                               DRS.last_commit_time
+                                             FROM   sys.dm_hadr_database_replica_states DRS 
+                                             INNER JOIN sys.availability_replicas AR ON DRS.replica_id = AR.replica_id 
+                                             INNER JOIN sys.dm_hadr_availability_replica_states HARS ON AR.group_id = HARS.group_id 
+                                                            AND AR.replica_id = HARS.replica_id 
+                                             ),
+               Pri_CommitTime AS 
+                                             (
+                                             SELECT  replica_server_name
+                                                                           , DBName
+                                                                           , last_commit_time
+                                             FROM    AG_Stats
+                                             WHERE role_desc = 'PRIMARY'
+                                             ),
+               Sec_CommitTime AS 
+                                             (
+                                             SELECT  replica_server_name
+                                                                           , DBName
+                                                                           , last_commit_time
+                                             FROM    AG_Stats
+                                             WHERE role_desc = 'SECONDARY'
+                                             )
+SELECT p.replica_server_name [primary_replica]
+               , p.[DBName] AS [DatabaseName]
+               , s.replica_server_name [secondary_replica]
+               , DATEDIFF(ss,s.last_commit_time,p.last_commit_time) AS [Sync_Lag_Secs]
+FROM Pri_CommitTime p
+LEFT JOIN Sec_CommitTime s ON [s].[DBName] = [p].[DBName] where DATEDIFF(ss,s.last_commit_time,p.last_commit_time) >=0
+
+
+
+--- to check network latency
+
+SELECT
+   [ReadLatency] =
+        CASE WHEN [num_of_reads] = 0
+            THEN 0 ELSE ([io_stall_read_ms] / [num_of_reads]) END,
+   [WriteLatency] =
+        CASE WHEN [num_of_writes] = 0
+            THEN 0 ELSE ([io_stall_write_ms] / [num_of_writes]) END,
+   [Latency] =
+        CASE WHEN ([num_of_reads] = 0 AND [num_of_writes] = 0)
+            THEN 0 ELSE ([io_stall] / ([num_of_reads] + [num_of_writes])) END,
+   [Latency Desc] = 
+         CASE 
+            WHEN ([num_of_reads] = 0 AND [num_of_writes] = 0) THEN 'N/A' 
+            ELSE 
+               CASE WHEN ([io_stall] / ([num_of_reads] + [num_of_writes])) < 2 THEN 'Excellent'
+                    WHEN ([io_stall] / ([num_of_reads] + [num_of_writes])) < 6 THEN 'Very good'
+                    WHEN ([io_stall] / ([num_of_reads] + [num_of_writes])) < 11 THEN 'Good'
+                    WHEN ([io_stall] / ([num_of_reads] + [num_of_writes])) < 21 THEN 'Poor'
+                    WHEN ([io_stall] / ([num_of_reads] + [num_of_writes])) < 101 THEN 'Bad'
+                    WHEN ([io_stall] / ([num_of_reads] + [num_of_writes])) < 501 THEN 'Yikes!'
+               ELSE 'YIKES!!'
+               END 
+         END, 
+   [AvgBPerRead] =
+        CASE WHEN [num_of_reads] = 0
+            THEN 0 ELSE ([num_of_bytes_read] / [num_of_reads]) END,
+   [AvgBPerWrite] =
+        CASE WHEN [num_of_writes] = 0
+            THEN 0 ELSE ([num_of_bytes_written] / [num_of_writes]) END,
+   [AvgBPerTransfer] =
+        CASE WHEN ([num_of_reads] = 0 AND [num_of_writes] = 0)
+            THEN 0 ELSE
+                (([num_of_bytes_read] + [num_of_bytes_written]) /
+                ([num_of_reads] + [num_of_writes])) END,
+   LEFT ([mf].[physical_name], 2) AS [Drive],
+   DB_NAME ([vfs].[database_id]) AS [DB],
+   [mf].[physical_name]
+FROM
+   sys.dm_io_virtual_file_stats (NULL,NULL) AS [vfs]
+   JOIN sys.master_files AS [mf]
+   ON [vfs].[database_id] = [mf].[database_id]
+      AND [vfs].[file_id] = [mf].[file_id]
+-- WHERE [vfs].[file_id] = 2 -- log files
+ORDER BY [Latency] DESC
+-- ORDER BY [ReadLatency] DESC
+-- ORDER BY [WriteLatency] DESC;
+GO
+
+
+--Spool Table Row Count Exceeded on BizTalk
+select count(*) from BizTalkMsgBoxDb.dbo.spool(nolock)
+select count(*) from BizTalkMsgBoxDb_2.dbo.spool(nolock)
+Select count(*) from BizTalkMsgBoxDb_3.dbo.spool(nolock)
+
+Hello welcome to Brinks.
+-- Master SQL Server List - Passwords (t0ps3cr3t)
+-- EU(FRASQP006) -- EMEA REGIONS deafult account neeed use.
+--- Itrack service acount and password
+BRINKSGBL\SAP_MSSQL_ITRACK  wu*Bpa9yp&Q7nsx
+
+-- service account passwords.
+brinksgbl\SAP_MSSQL_SA	hH#qc*vubxm99
+brinksgbl\SAD_MSSQL_SA	2s9cY&Htb7XbX3sB
+NA\IS database admin
+brinksgbl\IS Database Admin
+Brinksgbl\IS Global Database Engineering
+
+    
+Itrack issues send to Gobalappsupport team as well
+
+--Global AppSupport 
+
+
+----To check AD group of people we need to connect sandbox server ( Nausplnsqd003.na.brinksgbl.com ) open windows powershall ISE and run below query
+
+Get-ADGroupMember -Identity (need to change account group& need to remove domain names)"Compusafe_Dev" | Select-Object Name | Sort-Object Name
+
+----DPA log in deatils
+
+http://solarwindsdpa.na.brinksgbl.com:8123/
+
+Username: DBOPS
+Password: DbaSQL2022
+
+-----If you want check group member details use below query
+
+Exec master.dbo.xp_logininfo (need to change account group)'LATAM\guido.gomez', 'members'
+
+
+---To incident close we need to use Resloveing CI (mssqlsystemresource)
+
+-----To know the fragmentation level: 
+
+SELECT S.name as 'Schema',
+T.name as 'Table',
+I.name as 'Index',
+DDIPS.avg_fragmentation_in_percent,
+DDIPS.page_count
+FROM sys.dm_db_index_physical_stats (DB_ID(), NULL, NULL, NULL, NULL) AS DDIPS
+INNER JOIN sys.tables T on T.object_id = DDIPS.object_id
+INNER JOIN sys.schemas S on T.schema_id = S.schema_id
+INNER JOIN sys.indexes I ON I.object_id = DDIPS.object_id
+AND DDIPS.index_id = I.index_id
+WHERE DDIPS.database_id = DB_ID()
+and I.name is not null
+AND DDIPS.avg_fragmentation_in_percent > 0
+ORDER BY DDIPS.avg_fragmentation_in_percent desc
+
+-------if you cancel update stats cancel we need to update manually with the help of below query and you 
+    need to before execute below script rebuild index job was on which database it's running that database we need to remove from below query.
+
+USE [24SevenToolkit_Config] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Argentina] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Belgium] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_BRAZIL] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Canada] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Chile] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_China] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Colombia] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Cyprus] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_CzechRepublic] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Demo] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_DominicanRepublic] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Estonia] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_France] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Greece] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Indonesia] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Ireland] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Israel] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Jordan] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_LaReunion] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Latvia] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Lithuania] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Luxembourg] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Malaysia] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Mauritius] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Mexico] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Morocco] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Netherlands] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Panama] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Philippines] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Romania] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_Singapore] EXEC sp_updatestats;
+USE [24SevenToolkit_CVS_UAE] EXEC sp_updatestats;
+USE [Bridge_Common] EXEC sp_updatestats;
+USE [BrinksBridge_ODS] EXEC sp_updatestats;
+USE [BrinksBridgeP_Test] EXEC sp_updatestats;
+USE [DBAInfo] EXEC sp_updatestats;
+USE [msdb] EXEC sp_updatestats;
+USE [SSISDB] EXEC sp_updatestats;
+USE [master] EXEC sp_updatestats;
+
+
+-----If you want to see session_id query use below query
+
+dbcc inputbuffer(588)
+
+dbcc who2 and dbcc who2active this query we need to use on time basisc
+
+----To check job which database and which table it's running (Spid or session_id) we need to change 
+
+DECLARE @sqltext VARBINARY(128)
+SELECT @sqltext = sql_handle
+FROM sys.sysprocesses
+WHERE spid = 588
+SELECT TEXT
+FROM sys.dm_exec_sql_text(@sqltext)
+GO
+
+
+
+----To find out top 10 cpu usages query
+
+SELECT TOP 10 s.session_id,
+           r.status,
+           r.cpu_time,
+           r.logical_reads,
+           r.reads,
+           r.writes,
+           r.total_elapsed_time / (1000 * 60) 'Elaps M',
+           SUBSTRING(st.TEXT, (r.statement_start_offset / 2) + 1,
+           ((CASE r.statement_end_offset
+                WHEN -1 THEN DATALENGTH(st.TEXT)
+                ELSE r.statement_end_offset
+            END - r.statement_start_offset) / 2) + 1) AS statement_text,
+           COALESCE(QUOTENAME(DB_NAME(st.dbid)) + N'.' + QUOTENAME(OBJECT_SCHEMA_NAME(st.objectid, st.dbid)) 
+           + N'.' + QUOTENAME(OBJECT_NAME(st.objectid, st.dbid)), '') AS command_text,
+           r.command,
+           s.login_name,
+           s.host_name,
+           s.program_name,
+           s.last_request_end_time,
+           s.login_time,
+           r.open_transaction_count
+FROM sys.dm_exec_sessions AS s
+JOIN sys.dm_exec_requests AS r ON r.session_id = s.session_id CROSS APPLY sys.Dm_exec_sql_text(r.sql_handle) AS st
+WHERE r.session_id != @@SPID
+ORDER BY r.cpu_time DESC
+
+--- Ivision phone numbers
+iVision to the +1 855-280-2628 
+iVision : 6782443279
+
+-- Service Desk at 469-549-6733 or melissa.baker@brinksinc.com ( related to account and passowrd)
+-- Brinks Employee(Chandrasekhar.kuntimaddi.brinksinc.com) number  --000113567(INC1593471 )
+
+-- Passowrd policy evidence script
+select A.[name],
+A.[type_desc],
+A.is_disabled,
+A.create_date,A.modify_date,
+A.is_policy_checked,A.is_expiration_checked
+
+from sys.sql_logins A
+join sys.server_principals B ON A.[sid]
